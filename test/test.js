@@ -10,12 +10,17 @@ var db = new Sequelize('session_test', 'test', '12345', {
     dialect: 'sqlite'
     , logging: false
   })
-  , store = new SequelizeStore({db: db})
+  , store
   , sessionId = '1234a'
   , sessionData = {foo: 'bar', 'baz': 42};
 
+function createStore() {
+  store = new SequelizeStore({db: db});
+}
+
 describe('store', function() {
   before(function() {
+    createStore();
     return store.sync();
   });
   it('should have no length', function(done) {
@@ -47,6 +52,7 @@ describe('store db', function() {
 
 describe('#set()', function() {
   before(function() {
+    createStore();
     return store.sync();
   });
   it('should save the session', function(done) {
@@ -85,10 +91,37 @@ describe('#set()', function() {
       });
     });
   });
+  it('should extend defaults when extendDefaultFields set', function(done) {
+    function extend(defaults, session) {
+      defaults.userId = session.baz;
+      return defaults;
+    }
+    store = new SequelizeStore({db: db, extendDefaultFields: extend })
+    store.set(sessionId, sessionData, function(err, session) {
+      assert.ok(!err, '#set() got an error');
+      assert.ok(session, '#set() is not ok');
+
+      db.models.Session.findOne({
+        where: {
+          userId: sessionData.baz
+        }
+      })
+      .then(function(_session) {
+        assert.ok(_session, 'session userId not saved');
+        assert.deepEqual(session.dataValues, _session.dataValues);
+
+        store.destroy(sessionId, function(err) {
+          assert.ok(!err, '#destroy() got an error');
+          done();
+        });
+      });
+    });
+  });
 });
 
 describe('#touch()', function() {
   before(function() {
+    createStore();
     return store.sync();
   });
   it('should update the expires', function(done) {
@@ -119,6 +152,7 @@ describe('#touch()', function() {
 
 describe('#clearExpiredSessions()', function() {
   before(function() {
+    createStore();
     return store.sync();
   });
   it('should delete expired sessions', function(done) {
